@@ -17,14 +17,13 @@ logger = logging.getLogger(__name__)
 
 # --- Keep-Alive Function ---
 async def keep_alive():
-    """Pings the bot to keep it active on Railway."""
+    """Keeps the bot active."""
     while True:
         try:
-            # Just log that we're alive - no external ping needed
             logger.info("🔄 Keep-alive heartbeat...")
         except Exception as e:
             logger.error(f"Keep-alive error: {e}")
-        await asyncio.sleep(300)  # Ping every 5 minutes
+        await asyncio.sleep(300)  # Every 5 minutes
 
 # --- Helper Function for Compression ---
 async def compress_image(input_image_bytes, target_size_kb):
@@ -50,15 +49,12 @@ async def compress_image(input_image_bytes, target_size_kb):
         while min_quality <= quality:
             output.seek(0)
             output.truncate(0)
-            
-            # Save as JPEG for compression
             img.save(output, format='JPEG', quality=quality, optimize=True)
             
             if output.tell() / 1024 <= target_size_kb:
                 break
             quality -= 5
         else:
-            # If even the lowest quality doesn't meet the target
             output.seek(0)
             output.truncate(0)
             img.save(output, format='JPEG', quality=5, optimize=True)
@@ -72,7 +68,7 @@ async def compress_image(input_image_bytes, target_size_kb):
 
 # --- Bot Command Handlers ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Send a welcome message when the /start command is issued."""
+    """Send a welcome message."""
     await update.message.reply_text(
         "👋 *Hello! I'm ShrinkPicBot!*\n\n"
         "I can compress your images to any size you want.\n\n"
@@ -146,7 +142,7 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     except Exception as e:
         logger.error(f"Error processing image: {e}")
-        await status_msg.edit_text(f"❌ Sorry, I couldn't compress that image. Error: {str(e)[:50]}...")
+        await status_msg.edit_text(f"❌ Sorry, I couldn't compress that image. Please try again.")
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handles photos sent without the file option."""

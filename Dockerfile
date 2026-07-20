@@ -20,8 +20,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the rest of the application
 COPY main.py .
 
-# Set environment variable
+# Set environment variables
 ENV PYTHONUNBUFFERED=1
+ENV PORT=8080
+
+# Expose port (Railway expects this)
+EXPOSE 8080
 
 # Run the bot
-CMD ["python", "main.py"]
+CMD ["python", "-u", "main.py"]

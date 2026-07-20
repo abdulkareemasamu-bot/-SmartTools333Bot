@@ -2,11 +2,12 @@ import os
 import io
 import logging
 import asyncio
+import threading
 from datetime import datetime
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 from PIL import Image
-import aiohttp
+from http.server import HTTPServer, BaseHTTPRequestHandler
 
 # Enable logging
 logging.basicConfig(
@@ -14,6 +15,24 @@ logging.basicConfig(
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
+
+# --- Simple HTTP Server for Railway Health Checks ---
+class HealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header('Content-type', 'text/plain')
+        self.end_headers()
+        self.wfile.write(b'OK')
+    
+    def log_message(self, format, *args):
+        return  # Suppress log messages
+
+def run_health_server():
+    """Run a simple HTTP server on the PORT environment variable."""
+    port = int(os.environ.get('PORT', 8080))
+    server = HTTPServer(('0.0.0.0', port), HealthHandler)
+    logger.info(f"✅ Health server running on port {port}")
+    server.serve_forever()
 
 # --- Keep-Alive Function ---
 async def keep_alive():
@@ -197,6 +216,11 @@ def main():
         logger.error("Please add it in Railway: Variables → TELEGRAM_BOT_TOKEN")
         return
 
+    # Start health server in a separate thread
+    health_thread = threading.Thread(target=run_health_server, daemon=True)
+    health_thread.start()
+    logger.info("🔄 Health server started")
+
     # Create the Application
     app = ApplicationBuilder().token(token).build()
 
@@ -223,8 +247,12 @@ def main():
     logger.info("🚀 Starting ShrinkPicBot...")
     logger.info("✅ Bot is active and waiting for messages!")
     
-    # Run the bot
-    app.run_polling()
+    try:
+        # Run the bot
+        app.run_polling()
+    except Exception as e:
+        logger.error(f"❌ Bot crashed: {e}")
+        raise
 
 if __name__ == "__main__":
     main()

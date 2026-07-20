@@ -18,25 +18,19 @@ logger = logging.getLogger(__name__)
 # --- Keep-Alive Function ---
 async def keep_alive():
     """Pings the bot to keep it active on Railway."""
-    url = os.environ.get('RAILWAY_PUBLIC_DOMAIN', '')
-    if url:
-        while True:
-            try:
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(f"https://{url}") as response:
-                        logger.info(f"Keep-alive ping sent. Status: {response.status}")
-            except Exception as e:
-                logger.error(f"Keep-alive error: {e}")
-            await asyncio.sleep(300)  # Ping every 5 minutes
-    else:
-        logger.warning("No RAILWAY_PUBLIC_DOMAIN set. Keep-alive disabled.")
+    while True:
+        try:
+            # Just log that we're alive - no external ping needed
+            logger.info("🔄 Keep-alive heartbeat...")
+        except Exception as e:
+            logger.error(f"Keep-alive error: {e}")
+        await asyncio.sleep(300)  # Ping every 5 minutes
 
 # --- Helper Function for Compression ---
 async def compress_image(input_image_bytes, target_size_kb):
     """Compresses an image to be under a target size in KB."""
     try:
         img = Image.open(io.BytesIO(input_image_bytes))
-        original_format = img.format
         
         # Convert to RGB if necessary
         if img.mode in ('RGBA', 'LA') or (img.mode == 'P' and 'transparency' in img.info):
@@ -177,7 +171,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "📝 *Example caption:* `150`\n\n"
         "🛠 *Commands:*\n"
         "/start - Show welcome message\n"
-        "/help - Show this help message",
+        "/help - Show this help message\n"
+        "/stats - Show bot statistics",
         parse_mode='Markdown'
     )
 
@@ -187,7 +182,8 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         f"📊 *Bot Statistics*\n\n"
         f"⏰ Uptime: {str(uptime).split('.')[0]}\n"
-        f"🔄 Status: Active",
+        f"🔄 Status: Active\n"
+        f"📦 Memory: Running",
         parse_mode='Markdown'
     )
 
@@ -223,17 +219,13 @@ def main():
     # Register error handler
     app.add_error_handler(error_handler)
 
+    # Start the keep-alive task
+    loop = asyncio.get_event_loop()
+    loop.create_task(keep_alive())
+
     # Start the bot using long polling
     logger.info("🚀 Starting ShrinkPicBot...")
     logger.info("✅ Bot is active and waiting for messages!")
-    
-    # Run the bot with the keep-alive task
-    loop = asyncio.get_event_loop()
-    
-    # Start keep-alive if domain is available
-    if os.environ.get('RAILWAY_PUBLIC_DOMAIN'):
-        loop.create_task(keep_alive())
-        logger.info(f"🔄 Keep-alive enabled for {os.environ.get('RAILWAY_PUBLIC_DOMAIN')}")
     
     # Run the bot
     app.run_polling()

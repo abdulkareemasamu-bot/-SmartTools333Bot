@@ -1,7 +1,7 @@
 import os
 import logging
-from telegram import Update, ChatMember
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
+from telegram import Update
+from telegram.ext import Updater, CommandHandler, CallbackContext
 
 # Setup logging
 logging.basicConfig(
@@ -19,77 +19,36 @@ if not TOKEN:
 
 logger.info("✅ Bot starting...")
 
-# --- Helper Functions ---
-def is_admin(chat, user_id):
-    try:
-        member = chat.get_member(user_id)
-        return member.status in [ChatMember.ADMINISTRATOR, ChatMember.OWNER]
-    except:
-        return False
-
-def get_target_user(update):
-    """Get target user from reply or command."""
-    if update.message.reply_to_message:
-        return update.message.reply_to_message.from_user
-    
-    text = update.message.text
-    parts = text.split()
-    if len(parts) > 1:
-        username = parts[1].strip()
-        if username.startswith('@'):
-            username = username[1:]
-        
-        try:
-            for member in update.effective_chat.get_members():
-                if member.user.username and member.user.username.lower() == username.lower():
-                    return member.user
-        except:
-            pass
-    
-    return None
-
-# --- Command Handlers ---
+# --- Commands ---
 def start(update: Update, context: CallbackContext):
     """Start command."""
     user = update.effective_user
     logger.info(f"Start from {user.username or user.first_name}")
-    
     update.message.reply_text(
-        f"👋 *Hello {user.first_name}!*\n\n"
+        f"👋 Hello {user.first_name}!\n\n"
         "I'm a Group Management Bot.\n"
         "Add me to a group with Admin permissions.\n\n"
-        "*Commands:*\n"
+        "Commands:\n"
         "/start - Welcome\n"
         "/help - Help\n"
-        "/kick - Kick user\n"
-        "/ban - Ban user\n"
-        "/mute - Mute user (1 hour)\n"
-        "/warn - Warn user (3 = mute)\n"
-        "/unban - Unban user\n"
-        "/info - Group info\n\n"
-        "*Usage:*\n"
-        "Reply to a user's message with the command\n"
-        "Or: /kick @username",
-        parse_mode='Markdown'
+        "/kick @user - Kick user\n"
+        "/ban @user - Ban user\n"
+        "/mute @user - Mute for 1 hour\n"
+        "/warn @user - Warn user\n"
+        "/info - Group info"
     )
 
 def help_command(update: Update, context: CallbackContext):
     """Help command."""
     update.message.reply_text(
-        "🤖 *Group Management Bot Help*\n\n"
-        "*Admin Commands:*\n"
-        "/kick @user - Kick user\n"
-        "/ban @user - Ban user\n"
-        "/mute @user - Mute for 1 hour\n"
+        "🤖 Group Management Bot\n\n"
+        "Commands:\n"
+        "/kick @user - Kick user from group\n"
+        "/ban @user - Ban user from group\n"
+        "/mute @user - Mute user for 1 hour\n"
         "/warn @user - Warn user (3 = mute)\n"
-        "/unban @user - Unban user\n"
-        "/info - Group info\n\n"
-        "*How to use:*\n"
-        "1. Reply to user's message with command\n"
-        "2. Or use: /command @username\n\n"
-        "*Note:*\n"
-        "Bot must be admin to perform actions",
-        parse_mode='Markdown'
+        "/info - Group information\n\n"
+        "Usage: Reply to user's message or use @username"
     )
 
 def kick(update: Update, context: CallbackContext):
@@ -101,11 +60,35 @@ def kick(update: Update, context: CallbackContext):
         update.message.reply_text("❌ This command only works in groups.")
         return
     
-    if not is_admin(chat, user.id):
-        update.message.reply_text("❌ Only admins can use this command.")
+    # Check if admin
+    try:
+        member = chat.get_member(user.id)
+        if member.status not in ['administrator', 'creator']:
+            update.message.reply_text("❌ Only admins can use this command.")
+            return
+    except:
+        update.message.reply_text("❌ Error checking permissions.")
         return
     
-    target = get_target_user(update)
+    # Get target
+    target = None
+    if update.message.reply_to_message:
+        target = update.message.reply_to_message.from_user
+    else:
+        text = update.message.text
+        parts = text.split()
+        if len(parts) > 1:
+            username = parts[1].strip()
+            if username.startswith('@'):
+                username = username[1:]
+            try:
+                for member in chat.get_members():
+                    if member.user.username and member.user.username.lower() == username.lower():
+                        target = member.user
+                        break
+            except:
+                pass
+    
     if not target:
         update.message.reply_text("❌ Reply to a user or use: /kick @username")
         return
@@ -118,7 +101,7 @@ def kick(update: Update, context: CallbackContext):
         chat.ban_member(target.id)
         chat.unban_member(target.id)
         update.message.reply_text(f"✅ {target.first_name} has been kicked!")
-        logger.info(f"User {target.id} kicked by {user.id} in {chat.id}")
+        logger.info(f"Kicked {target.id}")
     except Exception as e:
         logger.error(f"Kick error: {e}")
         update.message.reply_text("❌ Failed to kick. Make me admin!")
@@ -132,11 +115,33 @@ def ban(update: Update, context: CallbackContext):
         update.message.reply_text("❌ This command only works in groups.")
         return
     
-    if not is_admin(chat, user.id):
-        update.message.reply_text("❌ Only admins can use this command.")
+    try:
+        member = chat.get_member(user.id)
+        if member.status not in ['administrator', 'creator']:
+            update.message.reply_text("❌ Only admins can use this command.")
+            return
+    except:
+        update.message.reply_text("❌ Error checking permissions.")
         return
     
-    target = get_target_user(update)
+    target = None
+    if update.message.reply_to_message:
+        target = update.message.reply_to_message.from_user
+    else:
+        text = update.message.text
+        parts = text.split()
+        if len(parts) > 1:
+            username = parts[1].strip()
+            if username.startswith('@'):
+                username = username[1:]
+            try:
+                for member in chat.get_members():
+                    if member.user.username and member.user.username.lower() == username.lower():
+                        target = member.user
+                        break
+            except:
+                pass
+    
     if not target:
         update.message.reply_text("❌ Reply to a user or use: /ban @username")
         return
@@ -148,41 +153,10 @@ def ban(update: Update, context: CallbackContext):
     try:
         chat.ban_member(target.id)
         update.message.reply_text(f"✅ {target.first_name} has been banned!")
-        logger.info(f"User {target.id} banned by {user.id} in {chat.id}")
+        logger.info(f"Banned {target.id}")
     except Exception as e:
         logger.error(f"Ban error: {e}")
         update.message.reply_text("❌ Failed to ban. Make me admin!")
-
-def unban(update: Update, context: CallbackContext):
-    """Unban user."""
-    chat = update.effective_chat
-    user = update.effective_user
-    
-    if chat.type == "private":
-        update.message.reply_text("❌ This command only works in groups.")
-        return
-    
-    if not is_admin(chat, user.id):
-        update.message.reply_text("❌ Only admins can use this command.")
-        return
-    
-    text = update.message.text
-    parts = text.split()
-    if len(parts) < 2:
-        update.message.reply_text("❌ Usage: /unban @username")
-        return
-    
-    username = parts[1].strip()
-    if username.startswith('@'):
-        username = username[1:]
-    
-    try:
-        chat.unban_member(username)
-        update.message.reply_text(f"✅ @{username} has been unbanned!")
-        logger.info(f"User @{username} unbanned by {user.id} in {chat.id}")
-    except Exception as e:
-        logger.error(f"Unban error: {e}")
-        update.message.reply_text("❌ Failed to unban.")
 
 def mute(update: Update, context: CallbackContext):
     """Mute user for 1 hour."""
@@ -193,11 +167,33 @@ def mute(update: Update, context: CallbackContext):
         update.message.reply_text("❌ This command only works in groups.")
         return
     
-    if not is_admin(chat, user.id):
-        update.message.reply_text("❌ Only admins can use this command.")
+    try:
+        member = chat.get_member(user.id)
+        if member.status not in ['administrator', 'creator']:
+            update.message.reply_text("❌ Only admins can use this command.")
+            return
+    except:
+        update.message.reply_text("❌ Error checking permissions.")
         return
     
-    target = get_target_user(update)
+    target = None
+    if update.message.reply_to_message:
+        target = update.message.reply_to_message.from_user
+    else:
+        text = update.message.text
+        parts = text.split()
+        if len(parts) > 1:
+            username = parts[1].strip()
+            if username.startswith('@'):
+                username = username[1:]
+            try:
+                for member in chat.get_members():
+                    if member.user.username and member.user.username.lower() == username.lower():
+                        target = member.user
+                        break
+            except:
+                pass
+    
     if not target:
         update.message.reply_text("❌ Reply to a user or use: /mute @username")
         return
@@ -209,7 +205,6 @@ def mute(update: Update, context: CallbackContext):
     try:
         from datetime import datetime, timedelta
         until = datetime.now() + timedelta(hours=1)
-        
         chat.restrict_member(
             target.id,
             can_send_messages=False,
@@ -219,7 +214,7 @@ def mute(update: Update, context: CallbackContext):
             until_date=until
         )
         update.message.reply_text(f"🔇 {target.first_name} muted for 1 hour!")
-        logger.info(f"User {target.id} muted by {user.id} in {chat.id}")
+        logger.info(f"Muted {target.id}")
     except Exception as e:
         logger.error(f"Mute error: {e}")
         update.message.reply_text("❌ Failed to mute. Make me admin!")
@@ -233,11 +228,33 @@ def warn(update: Update, context: CallbackContext):
         update.message.reply_text("❌ This command only works in groups.")
         return
     
-    if not is_admin(chat, user.id):
-        update.message.reply_text("❌ Only admins can use this command.")
+    try:
+        member = chat.get_member(user.id)
+        if member.status not in ['administrator', 'creator']:
+            update.message.reply_text("❌ Only admins can use this command.")
+            return
+    except:
+        update.message.reply_text("❌ Error checking permissions.")
         return
     
-    target = get_target_user(update)
+    target = None
+    if update.message.reply_to_message:
+        target = update.message.reply_to_message.from_user
+    else:
+        text = update.message.text
+        parts = text.split()
+        if len(parts) > 1:
+            username = parts[1].strip()
+            if username.startswith('@'):
+                username = username[1:]
+            try:
+                for member in chat.get_members():
+                    if member.user.username and member.user.username.lower() == username.lower():
+                        target = member.user
+                        break
+            except:
+                pass
+    
     if not target:
         update.message.reply_text("❌ Reply to a user or use: /warn @username")
         return
@@ -246,7 +263,7 @@ def warn(update: Update, context: CallbackContext):
         update.message.reply_text("❌ I can't warn myself!")
         return
     
-    # Get or create warn count
+    # Warn counter
     if not hasattr(context.bot_data, 'warns'):
         context.bot_data['warns'] = {}
     
@@ -256,12 +273,10 @@ def warn(update: Update, context: CallbackContext):
     
     update.message.reply_text(f"⚠️ {target.first_name} warned! ({warn_count}/3)")
     
-    # Auto-mute at 3 warnings
     if warn_count >= 3:
         try:
             from datetime import datetime, timedelta
             until = datetime.now() + timedelta(hours=1)
-            
             chat.restrict_member(
                 user_id,
                 can_send_messages=False,
@@ -270,9 +285,8 @@ def warn(update: Update, context: CallbackContext):
                 can_send_other_messages=False,
                 until_date=until
             )
-            update.message.reply_text(f"🔇 {target.first_name} auto-muted for 1 hour (3 warnings)!")
+            update.message.reply_text(f"🔇 {target.first_name} auto-muted (3 warnings)!")
             context.bot_data['warns'][user_id] = 0
-            logger.info(f"User {user_id} auto-muted after 3 warnings in {chat.id}")
         except Exception as e:
             logger.error(f"Auto-mute error: {e}")
 
@@ -285,14 +299,18 @@ def info(update: Update, context: CallbackContext):
         return
     
     user = update.effective_user
-    if not is_admin(chat, user.id):
-        update.message.reply_text("❌ Only admins can use this command.")
+    try:
+        member = chat.get_member(user.id)
+        if member.status not in ['administrator', 'creator']:
+            update.message.reply_text("❌ Only admins can use this command.")
+            return
+    except:
+        update.message.reply_text("❌ Error checking permissions.")
         return
     
     try:
         admins = chat.get_administrators()
         admin_list = "\n".join([f"👑 {a.user.first_name}" for a in admins[:10]])
-        
         bot = context.bot.get_me()
         
         update.message.reply_text(
@@ -300,8 +318,7 @@ def info(update: Update, context: CallbackContext):
             f"📌 Name: {chat.title}\n"
             f"🆔 ID: {chat.id}\n"
             f"👑 Admins: {len(admins)}\n"
-            f"🤖 Bot: @{bot.username}\n\n"
-            f"*Admins:*\n{admin_list}",
+            f"🤖 Bot: @{bot.username}",
             parse_mode='Markdown'
         )
     except Exception as e:
@@ -312,9 +329,9 @@ def error_handler(update, context):
     """Log errors."""
     logger.error(f"Update {update} caused error {context.error}")
 
-# --- Main Function ---
+# --- Main ---
 def main():
-    logger.info("🚀 Starting Group Management Bot...")
+    logger.info("🚀 Starting bot...")
     
     # Create updater
     updater = Updater(TOKEN, use_context=True)
@@ -325,16 +342,14 @@ def main():
     dp.add_handler(CommandHandler("help", help_command))
     dp.add_handler(CommandHandler("kick", kick))
     dp.add_handler(CommandHandler("ban", ban))
-    dp.add_handler(CommandHandler("unban", unban))
     dp.add_handler(CommandHandler("mute", mute))
     dp.add_handler(CommandHandler("warn", warn))
     dp.add_handler(CommandHandler("info", info))
     
-    # Error handler
     dp.add_error_handler(error_handler)
     
-    # Start bot
-    logger.info("✅ Bot is running! Send /start on Telegram.")
+    # Start
+    logger.info("✅ Bot is running! Send /start")
     updater.start_polling()
     updater.idle()
 
